@@ -4,16 +4,14 @@
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
 
-struct SDLState
-{
-    SDL_Window *window;
-    SDL_Renderer *renderer;
+struct SDLState {
+    SDL_Window* window;
+    SDL_Renderer* renderer;
 };
 
-void cleanup(SDLState &state);
+void cleanup(SDLState& state);
 
-int main(int argc, char const *argv[])
-{
+int main(int argc, char const* argv[]) {
     SDLState state;
     // Checks if SDL initialized properly
     if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -22,7 +20,7 @@ int main(int argc, char const *argv[])
     }
 
     // Varaible for the window
-    SDL_Window *window;
+    SDL_Window* window;
 
     // Width and Heights for the window
     int width = 800;
@@ -48,33 +46,50 @@ int main(int argc, char const *argv[])
     }
 
     // Loads Assets
-    SDL_Texture*idleTex = IMG_LoadTexture(state.renderer, "data/idle.png");
+    SDL_Texture* idleTex = IMG_LoadTexture(state.renderer, "data/idle.png");
+    SDL_SetTextureScaleMode(idleTex, SDL_SCALEMODE_NEAREST);
 
     // Game Loop
     bool running = true;
     while (running) {
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
-            case SDL_EVENT_QUIT:
-                running = false;
-                break;
+                case SDL_EVENT_QUIT:
+                    running = false;
+                    break;
             }
         }
 
         // Perform drawing commands
-        SDL_SetRenderDrawColor(state.renderer, 255,255,255,255);
+        SDL_SetRenderDrawColor(state.renderer, 20, 10, 30, 255);
         SDL_RenderClear(state.renderer);
+
+        SDL_FRect src{
+            .x = 0,
+            .y = 0,
+            .w = 32,
+            .h = 32,
+        };
+
+        SDL_FRect dst{
+            .x = 0,
+            .y = 0,
+            .w = 32,
+            .h = 32,
+        };
+
+        SDL_RenderTexture(state.renderer, idleTex, &src, &dst);
 
         // Swap buffers and present
         SDL_RenderPresent(state.renderer);
     }
 
+    SDL_DestroyTexture(idleTex);
     cleanup(state);
     return 0;
 }
 
-void cleanup(SDLState &state)
-{
+void cleanup(SDLState& state) {
     SDL_DestroyRenderer(state.renderer);
     SDL_DestroyWindow(state.window);
     SDL_Quit();
