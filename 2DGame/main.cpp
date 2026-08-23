@@ -7,41 +7,20 @@
 struct SDLState {
     SDL_Window* window;
     SDL_Renderer* renderer;
+    int width, height, logW, logH;
 };
 
+bool initialize(SDLState& state);
 void cleanup(SDLState& state);
 
 int main(int argc, char const* argv[]) {
     SDLState state;
-    // Checks if SDL initialized properly
-    if (!SDL_Init(SDL_INIT_VIDEO)) {
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Error initializing SDL3", nullptr);
-        return 1;
-    }
+    state.width = 1600;
+    state.height = 900;
+    state.logW = 640;
+    state.logH = 320;
 
-    // Varaible for the window
-    SDL_Window* window;
-
-    // Width and Heights for the window
-    int width = 800;
-    int height = 600;
-
-    // Create the window with parameters
-    state.window = SDL_CreateWindow("SDL3 Demo Game Tutorial", width, height, 0);
-
-    if (!state.window) {
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Error creating window", nullptr);
-        cleanup(state);
-        return 1;
-    }
-
-    // Create an event object
-    SDL_Event event;
-
-    // Create renderer
-    state.renderer = SDL_CreateRenderer(state.window, nullptr);
-    if (!state.renderer) {
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Error creating renderer", state.window);
+    if (!initialize(state)) {
         return 1;
     }
 
@@ -49,39 +28,67 @@ int main(int argc, char const* argv[]) {
     SDL_Texture* idleTex = IMG_LoadTexture(state.renderer, "data/idle.png");
     SDL_SetTextureScaleMode(idleTex, SDL_SCALEMODE_NEAREST);
 
+    // Game Data
+    const bool* keys = SDL_GetKeyboardState(nullptr);
+    float playerX = 0;
+    const float floor = state.logH;
+    uint16_t prevTime = SDL_GetTicks();
+
     // Game Loop
     bool running = true;
     while (running) {
+        // Create an event object
+        SDL_Event event{0};
+        uint16_t nowTime = SDL_GetTicks();
+        float deltaTime = (nowTime - prevTime) / 1000.0f;  // Convert to second
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
-                case SDL_EVENT_QUIT:
+                case SDL_EVENT_QUIT: {
                     running = false;
                     break;
+                }
+                case SDL_EVENT_WINDOW_RESIZED: {
+                    state.width = event.window.data1;
+                    state.height = event.window.data2;
+                    break;
+                }
             }
         }
+
+        // Handle Movement
+        float moveAmount = 0;
+        if (keys[SDL_SCANCODE_A]) {
+            moveAmount += -75.0f;
+        }
+        if (keys[SDL_SCANCODE_D]) {
+            moveAmount += 75.0f;
+        }
+        playerX += moveAmount * deltaTime;
 
         // Perform drawing commands
         SDL_SetRenderDrawColor(state.renderer, 20, 10, 30, 255);
         SDL_RenderClear(state.renderer);
 
+        const float spriteSize = 32;
         SDL_FRect src{
             .x = 0,
             .y = 0,
-            .w = 32,
-            .h = 32,
+            .w = spriteSize,
+            .h = spriteSize,
         };
 
         SDL_FRect dst{
-            .x = 0,
-            .y = 0,
-            .w = 32,
-            .h = 32,
+            .x = playerX,
+            .y = floor - spriteSize,
+            .w = spriteSize,
+            .h = spriteSize,
         };
 
         SDL_RenderTexture(state.renderer, idleTex, &src, &dst);
 
         // Swap buffers and present
         SDL_RenderPresent(state.renderer);
+        prevTime = nowTime;
     }
 
     SDL_DestroyTexture(idleTex);
@@ -93,4 +100,33 @@ void cleanup(SDLState& state) {
     SDL_DestroyRenderer(state.renderer);
     SDL_DestroyWindow(state.window);
     SDL_Quit();
+}
+
+bool initialize(SDLState& state) {
+    bool initSuccess = true;
+    // Checks if SDL initialized properly
+    if (!SDL_Init(SDL_INIT_VIDEO)) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Error initializing SDL3", nullptr);
+        initSuccess = false;
+    }
+
+    // Create the window with parameters
+    state.window = SDL_CreateWindow("SDL3 Demo Game Tutorial", state.width, state.height, SDL_WINDOW_RESIZABLE);
+
+    if (!state.window) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Error creating window", nullptr);
+        cleanup(state);
+        initSuccess = false;
+    }
+
+    // Create renderer
+    state.renderer = SDL_CreateRenderer(state.window, nullptr);
+    if (!state.renderer) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Error creating renderer", state.window);
+        cleanup(state);
+        initSuccess = false;
+    }
+
+    SDL_SetRenderLogicalPresentation(state.renderer, state.logW, state.logH, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+    return initSuccess;
 }
