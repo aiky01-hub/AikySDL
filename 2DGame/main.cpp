@@ -24,6 +24,9 @@ struct SDLState {
 
 const size_t Layer_IDX_LEVEL = 0;
 const size_t Layer_IDX_CHARACTERS = 1;
+const int MAP_ROWS = 5;
+const int MAP_COLS = 50;
+const int TILE_SIZE = 32;
 
 struct GameState {
     std::array<std::vector<GameObject>, 2> layers;
@@ -54,6 +57,7 @@ struct Resources {
     void load(SDLState& state) {
         playerAnims.resize(5);
         playerAnims[ANIM_PLAYER_IDLE] = Animation(8, 1.6f);
+        playerAnims[ANIM_PLAYER_RUN] = Animation(4, 0.5f);
 
         texIdle = loadTexture(state.renderer, "data/idle.png");
         texRun = loadTexture(state.renderer, "data/run.png");
