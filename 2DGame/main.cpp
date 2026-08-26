@@ -41,7 +41,7 @@ struct Resources {
     std::vector<Animation> playerAnims;
 
     std::vector<SDL_Texture*> textures;
-    SDL_Texture* texIdle;
+    SDL_Texture *texIdle, *texRun;
 
     SDL_Texture* loadTexture(SDL_Renderer* renderer, const std::string& filepath) {
         // Loads Assets
@@ -56,6 +56,7 @@ struct Resources {
         playerAnims[ANIM_PLAYER_IDLE] = Animation(8, 1.6f);
 
         texIdle = loadTexture(state.renderer, "data/idle.png");
+        texRun = loadTexture(state.renderer, "data/run.png");
     }
 
     void unload() {
@@ -231,6 +232,8 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
             case PlayerState::idle: {
                 if (currentDirection) {
                     obj.data.player.state = PlayerState::running;
+                    obj.texture = res.texRun;
+                    obj.currentAnimation = res.ANIM_PLAYER_RUN;
                 } else {
                     if (obj.velocity.x) {
                         const float factor = obj.velocity.x > 0 ? -1.5f : -1.5f;
@@ -247,6 +250,8 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
             case PlayerState::running: {
                 if (!currentDirection) {
                     obj.data.player.state = PlayerState::idle;
+                    obj.texture = res.texIdle;
+                    obj.currentAnimation = res.ANIM_PLAYER_IDLE;
                 }
                 break;
             }
