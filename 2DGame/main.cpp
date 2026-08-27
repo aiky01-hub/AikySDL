@@ -44,7 +44,7 @@ struct Resources {
     std::vector<Animation> playerAnims;
 
     std::vector<SDL_Texture*> textures;
-    SDL_Texture *texIdle, *texRun;
+    SDL_Texture *texIdle, *texRun, *texBrick, *texGrass, *texGround, *texPanel;
 
     SDL_Texture* loadTexture(SDL_Renderer* renderer, const std::string& filepath) {
         // Loads Assets
@@ -61,6 +61,10 @@ struct Resources {
 
         texIdle = loadTexture(state.renderer, "data/idle.png");
         texRun = loadTexture(state.renderer, "data/run.png");
+        texBrick = loadTexture(state.renderer, "data/tiles/brick.png");
+        texGrass = loadTexture(state.renderer, "data/tiles/grass.png");
+        texGround = loadTexture(state.renderer, "data/tiles/ground.png");
+        texPanel = loadTexture(state.renderer, "data/tiles/panel.png");
     }
 
     void unload() {
@@ -74,6 +78,7 @@ bool initialize(SDLState& state);
 void cleanup(SDLState& state);
 void drawObject(const SDLState& state, GameState& gs, GameObject& obj, float deltaTime);
 void update(const SDLState& state, GameState& gs, Resources& res, GameObject& obj, float deltaTime);
+void createTiles(const SDLState& state, GameState& gs, const Resources& res);
 
 int main(int argc, char const* argv[]) {
     SDLState state;
@@ -92,16 +97,7 @@ int main(int argc, char const* argv[]) {
 
     // Game Data
     GameState gs;
-    // Create the Player
-    GameObject player;
-    player.type = ObjectType::player;
-    player.data.player = PlayerData();
-    player.texture = res.texIdle;
-    player.animations = res.playerAnims;
-    player.currentAnimation = res.ANIM_PLAYER_IDLE;
-    player.acceleration = glm::vec2(300, 0);
-    player.maxSpeedX = 100;
-    gs.layers[Layer_IDX_CHARACTERS].push_back(player);
+    createTiles(state, gs, res);
 
     uint16_t prevTime = SDL_GetTicks();
 
@@ -268,5 +264,70 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
         }
         // Add velocity to position
         obj.position += obj.velocity * deltaTime;
+    }
+}
+
+void createTiles(const SDLState& state, GameState& gs, const Resources& res) {
+    /*
+      1 - Ground
+      2 - Panel
+      3 - Enemy
+      4 - Player
+      5 - Grass
+      6 - Brick
+    */
+
+    short map[MAP_ROWS][MAP_COLS];
+
+    for (int r = 0; r < MAP_ROWS; r++)
+        for (int c = 0; c < MAP_COLS; c++)
+            map[r][c] = 0;
+
+    for (int c = 0; c < MAP_COLS; c++) {
+        map[4][c] = 1;
+    }
+
+    map[0][1] = 4;
+
+    const auto createObject = [&state](int r, int c, SDL_Texture* tex, ObjectType type) {
+        GameObject o;
+        o.type = type;
+        o.position = glm::vec2(c * TILE_SIZE, state.logH - (MAP_ROWS - r) * TILE_SIZE);
+        o.texture = tex;
+        return o;
+    };
+
+    for (int r = 0; r < MAP_ROWS; r++) {
+        for (int c = 0; c < MAP_COLS; c++) {
+            switch (map[r][c]) {
+                case 1: {
+                    // Ground Tile
+                    GameObject ground = createObject(r, c, res.texGround, ObjectType::level);
+                    gs.layers[Layer_IDX_LEVEL].push_back(ground);
+                    break;
+                }
+                case 2: {
+                    GameObject panel = createObject(r, c, res.texPanel, ObjectType::level);
+                    gs.layers[Layer_IDX_LEVEL].push_back(panel);
+                    break;
+                }
+                case 3: {
+                    break;
+                }
+                case 4: {
+                    // Create the Player
+                    GameObject player = createObject(r, c, res.texIdle, ObjectType::player);
+                    player.data.player = PlayerData();
+                    player.texture = res.texIdle;
+                    player.animations = res.playerAnims;
+                    player.currentAnimation = res.ANIM_PLAYER_IDLE;
+                    player.acceleration = glm::vec2(300, 0);
+                    player.maxSpeedX = 100;
+                    gs.layers[Layer_IDX_CHARACTERS].push_back(player);
+
+                    break;
+                }
+            }
+        }
     }
 }
