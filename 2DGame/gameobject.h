@@ -44,13 +44,16 @@ struct GameObject {
     std::vector<Animation> animations;
     int currentAnimation;
     SDL_Texture* texture;
+    bool dynamic;
+    SDL_FRect collider;
 
-    GameObject() : data{.level = LevelData()} {
+    GameObject() : data{.level = LevelData()}, collider{0} {
         type = ObjectType::level;
         direction = 1;
         maxSpeedX = 0;
         position = velocity = acceleration = glm::vec2(0);
         currentAnimation = -1;
         texture = nullptr;
+        dynamic = false;
     }
 };

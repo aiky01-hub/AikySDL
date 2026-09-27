@@ -5,6 +5,7 @@
 #include <SDL3_image/SDL_image.h>
 
 #include <array>
+#include <format>
 #include <glm/glm.hpp>
 #include <iostream>
 #include <string>
@@ -33,8 +34,10 @@ struct GameState {
     int playerIndex;
 
     GameState() {
-        playerIndex = 0;
+        playerIndex = -1;
     }
+
+    GameObject& player() { return layers[Layer_IDX_CHARACTERS][playerIndex]; }
 };
 
 // Keep track of all the pointers, integers, sound files, textures etc.
@@ -79,6 +82,9 @@ void cleanup(SDLState& state);
 void drawObject(const SDLState& state, GameState& gs, GameObject& obj, float deltaTime);
 void update(const SDLState& state, GameState& gs, Resources& res, GameObject& obj, float deltaTime);
 void createTiles(const SDLState& state, GameState& gs, const Resources& res);
+void checkCollision(const SDLState& state, GameState& gs, Resources& res, GameObject& a, GameObject& b, float deltaTime);
+void collisionResponse(const SDLState& state, GameState& gs, Resources& res, const SDL_FRect rectA, const SDL_FRect rectB, const SDL_FRect rectC, GameObject& a, GameObject& b, float deltaTime);
+void handleKeyInput(const SDLState& state, GameState& gs, GameObject& obj, SDL_Scancode key, bool keyDown);
 
 int main(int argc, char const* argv[]) {
     SDLState state;
@@ -91,7 +97,7 @@ int main(int argc, char const* argv[]) {
         return 1;
     }
 
-    // Load Game assets
+    /* Load Game assets */
     Resources res;
     res.load(state);
 
@@ -107,7 +113,8 @@ int main(int argc, char const* argv[]) {
         // Create an event object
         SDL_Event event{0};
         uint16_t nowTime = SDL_GetTicks();
-        float deltaTime = (nowTime - prevTime) / 1000.0f;  // Convert to second
+        float deltaTime = (nowTime - prevTime) / 1000.0f; /* Convert to seconds */
+        /* Poll for currently happening events from the buffer */
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
                 case SDL_EVENT_QUIT: {
@@ -117,6 +124,14 @@ int main(int argc, char const* argv[]) {
                 case SDL_EVENT_WINDOW_RESIZED: {
                     state.width = event.window.data1;
                     state.height = event.window.data2;
+                    break;
+                }
+                case SDL_EVENT_KEY_DOWN: {
+                    handleKeyInput(state, gs, gs.player(), event.key.scancode, true);
+                    break;
+                }
+                case SDL_EVENT_KEY_UP: {
+                    handleKeyInput(state, gs, gs.player(), event.key.scancode, false);
                     break;
                 }
             }
@@ -142,6 +157,10 @@ int main(int argc, char const* argv[]) {
                 drawObject(state, gs, obj, deltaTime);
             }
         }
+
+        /* Display debug info */
+        SDL_SetRenderDrawColor(state.renderer, 255, 255, 255, 255);
+        SDL_RenderDebugText(state.renderer, 5, 5, std::format("State: {}", static_cast<int>(gs.player().data.player.state)).c_str());
 
         // Swap buffers and present
         SDL_RenderPresent(state.renderer);
@@ -216,6 +235,9 @@ void drawObject(const SDLState& state, GameState& gs, GameObject& obj, float del
 }
 
 void update(const SDLState& state, GameState& gs, Resources& res, GameObject& obj, float deltaTime) {
+    if (obj.dynamic) {
+        obj.velocity += glm::vec2(0, 500) * deltaTime;
+    }
     if (obj.type == ObjectType::player) {
         float currentDirection = 0;
         if (state.keys[SDL_SCANCODE_D]) {
@@ -236,7 +258,7 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
                     obj.currentAnimation = res.ANIM_PLAYER_RUN;
                 } else {
                     if (obj.velocity.x) {
-                        const float factor = obj.velocity.x > 0 ? -1.5f : -1.5f;
+                        const float factor = obj.velocity.x > 0 ? -1.5f : 1.5f;
                         float amount = factor * obj.acceleration.x * deltaTime;
                         if (std::abs(obj.velocity.x) < std::abs(amount)) {
                             obj.velocity.x = 0;
@@ -262,8 +284,63 @@ void update(const SDLState& state, GameState& gs, Resources& res, GameObject& ob
         if (std::abs(obj.velocity.x) > obj.maxSpeedX) {
             obj.velocity.x = currentDirection * obj.maxSpeedX;
         }
-        // Add velocity to position
-        obj.position += obj.velocity * deltaTime;
+    }
+    // Add velocity to position
+    obj.position += obj.velocity * deltaTime;
+
+    // Handle collision
+    for (auto& layer : gs.layers) {
+        for (GameObject& objB : layer) {
+            if (&obj != &objB) {
+                checkCollision(state, gs, res, obj, objB, deltaTime);
+            }
+        }
+    }
+}
+
+void collisionResponse(const SDLState& state, GameState& gs, Resources& res, const SDL_FRect rectA, const SDL_FRect rectB, const SDL_FRect rectC, GameObject& a, GameObject& b, float deltaTime) {
+    if (a.type == ObjectType::player) {
+        switch (b.type) {
+            case ObjectType::level: {
+                if (rectC.w < rectC.h) {
+                    if (a.velocity.x > 0) {  // Going right
+                        // Push character abit to left to avoid being stuck on the wall;
+                        a.position.x -= (rectC.w + 0.01);
+                    } else if (a.velocity.x < 0) {
+                        a.position.x += rectC.w;
+                    }
+                    a.velocity.x = 0;
+                } else {
+                    if (a.velocity.y > 0) {  // Going down
+                        a.position.y -= rectC.h;
+                    } else if (a.velocity.y < 0) {
+                        a.position.y += rectC.h;
+                    }
+                    a.velocity.y = 0;
+                }
+                break;
+            }
+        }
+    }
+}
+
+void checkCollision(const SDLState& state, GameState& gs, Resources& res, GameObject& a, GameObject& b, float deltaTime) {
+    SDL_FRect rectA{
+        .x = a.position.x + a.collider.x,
+        .y = a.position.y + a.collider.y,
+        .w = a.collider.w,
+        .h = a.collider.h,
+    };
+    SDL_FRect rectB{
+        .x = b.position.x + b.collider.x,
+        .y = b.position.y + b.collider.y,
+        .w = b.collider.w,
+        .h = b.collider.h,
+    };
+    SDL_FRect rectC{0};
+
+    if (SDL_GetRectIntersectionFloat(&rectA, &rectB, &rectC)) {
+        collisionResponse(state, gs, res, rectA, rectB, rectC, a, b, deltaTime);
     }
 }
 
@@ -288,12 +365,15 @@ void createTiles(const SDLState& state, GameState& gs, const Resources& res) {
     }
 
     map[0][1] = 4;
+    map[3][0] = 2;
+    map[3][4] = 2;
 
     const auto createObject = [&state](int r, int c, SDL_Texture* tex, ObjectType type) {
         GameObject o;
         o.type = type;
         o.position = glm::vec2(c * TILE_SIZE, state.logH - (MAP_ROWS - r) * TILE_SIZE);
         o.texture = tex;
+        o.collider = {.x = 0, .y = 0, .w = TILE_SIZE, .h = TILE_SIZE};
         return o;
     };
 
@@ -323,10 +403,40 @@ void createTiles(const SDLState& state, GameState& gs, const Resources& res) {
                     player.currentAnimation = res.ANIM_PLAYER_IDLE;
                     player.acceleration = glm::vec2(300, 0);
                     player.maxSpeedX = 100;
+                    player.dynamic = true;
+                    player.collider = {
+                        .x = 11, .y = 6, .w = 10, .h = 26};
                     gs.layers[Layer_IDX_CHARACTERS].push_back(player);
-
+                    gs.playerIndex = gs.layers[Layer_IDX_CHARACTERS].size() - 1;
                     break;
                 }
+            }
+        }
+    }
+    assert(gs.playerIndex != -1);
+}
+
+void handleKeyInput(const SDLState& state, GameState& gs, GameObject& obj, SDL_Scancode key, bool keyDown) {
+    /**
+     * @params key          The code of the key that was pressed
+     * @params keyDown      Wether the key is pressed or being released
+     * */
+    const float JUMP_FORCE = -200.f;
+    if (obj.type == ObjectType::player) {
+        switch (obj.data.player.state) {
+            case PlayerState::idle: {
+                if (key == SDL_SCANCODE_K && keyDown) {
+                    obj.data.player.state == PlayerState::jumping;
+                    obj.velocity.y += JUMP_FORCE;
+                }
+                break;
+            }
+            case PlayerState::running: {
+                if (key == SDL_SCANCODE_K && keyDown) {
+                    obj.data.player.state == PlayerState::jumping;
+                    obj.velocity.y += JUMP_FORCE;
+                }
+                break;
             }
         }
     }
